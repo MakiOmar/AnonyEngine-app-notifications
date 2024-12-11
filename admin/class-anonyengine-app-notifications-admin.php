@@ -72,6 +72,28 @@ class Anonyengine_App_Notifications_Admin {
 		 */
 		add_filter( 'anony_anoapp_devices_args', array( $this, 'device_supports' ) );
 
+		add_filter(
+			'manage_anoapp_devices_posts_columns',
+			function ( $columns ) {
+				$columns['author'] = esc_html__( 'Author', 'textdomain' );
+				return $columns;
+			}
+		);
+
+		add_action(
+			'manage_anoapp_devices_posts_custom_column',
+			function ( $column_name, $post_id ) {
+				if ( 'author' === $column_name ) {
+					$post        = get_post( $post_id );
+					$author_id   = $post->post_author;
+					$author_name = get_the_author_meta( 'display_name', $author_id );
+					echo esc_html( $author_name );
+				}
+			},
+			10,
+			2
+		);
+
 		$this->notifications_actions();
 	}
 	/**
