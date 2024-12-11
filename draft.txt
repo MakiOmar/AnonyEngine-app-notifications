@@ -1,0 +1,139 @@
+
+	/**
+	 * Run the plugin
+	 *
+	 * @param array $term_ids An array of terms IDs.
+	 */
+	public function push_notification( $term_ids ) {
+
+		$tax_query = array();
+
+		foreach ( $term_ids as $term_id ) {
+			$tax_query[] = array(
+
+				'taxonomy' => 'anoapp_subscriptions',
+				'field'    => 'term_id',
+				'terms'    => $term_id,
+
+			);
+		}
+
+		if ( count( $tax_query ) > 1 ) {
+			$tax_query['relation'] = 'OR';
+		}
+
+		$devices_id = array();
+
+		$get_devices = get_posts(
+			array(
+				'post_type'              => 'anoapp_devices',
+				'post_status'            => 'private',
+				'posts_per_page'         => -1,
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'tax_query'              => $tax_query,
+			)
+		);
+
+		if ( $get_devices ) {
+
+			unset( $tax_query );
+
+			$devices_id = wp_list_pluck( $get_devices, 'post_excerpt' );
+
+			$devices_id = apply_filters( 'fcmpm_api_send_notification_devices', $devices_id, $get_devices, $post_id, $post );
+
+			unset( $get_devices );
+
+			if ( ! empty( $devices_id ) ) {
+				$notification = array(
+					'title' => 'Test notification',
+					'body'  => 'Test notification body',
+					'sound' => 'default',
+					'icon'  => '',
+					'color' => '',
+					'type'  => 1,
+				);
+
+				$data = array();
+
+				$this->send_notification(
+					$devices_id,
+					$notification,
+					array()
+				);
+
+			}
+		}
+	}
+
+	/**
+	 * PRIVATE: Send notification. wp_remote_request have some problems here and we must use pure cURL.
+	 *
+	 * @param array $ids Devices IDs.
+	 * @param array $notification Notification.
+	 * @param array $data Data.
+	 *
+	 * @return void
+	 */
+	private function send_notification( $ids, $notification, $data ) {
+		$options = ANONY_Options_Model::get_instance( ANONYENGINE_APP_NOTIFICATIONS_OPTIONS );
+
+		$fields = array(
+			'registration_ids' => $ids,
+			'notification'     => $notification,
+			'data'             => $data,
+		);
+
+		$request = wp_remote_post(
+			$this->url,
+			array(
+				'method'  => 'POST',
+				'timeout' => 30,
+				'headers' => array(
+					'Authorization' => 'key=' . $options->settings_api_key,
+					'Content-Type'  => 'application/json',
+				),
+				'body'    => json_encode( $fields ),
+			)
+		);
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			if ( is_wp_error( $request ) || wp_remote_retrieve_response_code( $request ) != 200 ) {
+				error_log( print_r( $request, true ) );
+			}
+		}
+
+		$response = wp_remote_retrieve_body( $request );
+	}
+
+private function generate_rest_api_key() {
+	$sep = array( '.', ':', '-', '_' );
+
+	$rest_api_key = join(
+		$sep[ mt_rand( 0, count( $sep ) - 1 ) ],
+		array(
+			self::generate_token( 10 ) . $sep[ mt_rand( 0, count( $sep ) - 1 ) ] . self::generate_token( mt_rand( 6, 16 ) ),
+			self::generate_token( mt_rand( 16, 24 ) ),
+			self::generate_token( mt_rand( 24, 32 ) ),
+		)
+	);
+
+	return $rest_api_key;
+}
+
+/**
+	* Generate unique token
+	*/
+public static function generate_token( int $length = 16 ) {
+	if ( function_exists( 'openssl_random_pseudo_bytes' ) || function_exists( 'random_bytes' ) ) {
+		if ( version_compare( PHP_VERSION, '7.0.0', '>=' ) ) {
+			return substr( str_rot13( bin2hex( random_bytes( ceil( $length * 2 ) ) ) ), 0, $length );
+		} else {
+			return substr( str_rot13( bin2hex( openssl_random_pseudo_bytes( ceil( $length * 2 ) ) ) ), 0, $length );
+		}
+	} else {
+		return substr( str_replace( array( '.', ' ', '_' ), mt_rand( 1000, 9999 ), uniqid( 't' . microtime() ) ), 0, $length );
+	}
+}

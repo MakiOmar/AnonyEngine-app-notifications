@@ -1,0 +1,52 @@
+/**
+ * All of the CSS for your public-facing functionality should be
+ * included in this file.
+ */
+.anotf-notification-bell{
+	display: flex;
+}
+body.rtl .anotf-notifications-list ul{
+	right: auto;
+	left: 20px;
+}
+.anotf-notifications-list ul{
+	position: absolute;
+	top: 30px;
+	right: 20px;
+	padding: 0;
+	background-color: #fff;
+	border-radius: 10px;
+	list-style-type: none;
+	max-height: 0;
+	overflow: hidden;
+	transition: all 1s ease-in-out;
+	min-width: 250px;
+}
+.anotf-notifications-list ul li{
+	padding: 5px;
+}
+.anotf-notifications-list ul li a{
+	display: flex;
+}
+.anotf-notifications-list ul li:hover{
+	background-color: black;
+}
+.anotf-notifications-list ul li:hover > a{
+	color: #fff;
+}
+.show-notififcations .anotf-notifications-list ul{
+	max-height: 900px;
+}
+.anotf-notification-bell-container{
+	position: relative;
+}
+.anotf-notification-status{
+	display: block;
+	height: 8px;
+	width: 8px;
+	border-radius: 50%;
+	background-color: rgb(133, 26, 26);
+}
+.anotf-notification-status.anotf-has-new{
+	background-color: rgb(5, 114, 49);
+}

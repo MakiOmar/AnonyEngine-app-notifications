@@ -1,0 +1,10 @@
+{
+    "require": {
+        "google/auth": "^1.42"
+    },
+    "autoload": {
+        "psr-4": {
+            "FbCloudMessaging\\": "includes/firebase/"
+        }
+    }
+}
