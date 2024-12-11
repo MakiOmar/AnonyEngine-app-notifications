@@ -311,7 +311,51 @@ class AnonyengineFirebase {
 			}
 		}
 	}
-
+	/**
+	 * Returns arguments for the subscribe route.
+	 *
+	 * @return array Route arguments.
+	 */
+	private function get_subscribe_args() {
+		return array(
+			'rest_api_key' => array(
+				'validate_callback' => function ( $param ) {
+					return ! empty( $param );
+				},
+				'required'          => true,
+			),
+			'device_token' => array(
+				'validate_callback' => function ( $param ) {
+					return ! empty( $param );
+				},
+				'required'          => true,
+			),
+			'user_id'      => array(
+				'validate_callback' => function ( $param ) {
+					return ! empty( $param );
+				},
+				'required'          => true,
+			),
+			'device_uuid'  => array(
+				'validate_callback' => function ( $param ) {
+					return ! empty( $param );
+				},
+				'required'          => false,
+			),
+			'subscription' => array(
+				'validate_callback' => function ( $param ) {
+					return ! empty( $param );
+				},
+				'required'          => false,
+			),
+			'device_name'  => array(
+				'required' => false,
+			),
+			'os_version'   => array(
+				'required' => false,
+			),
+		);
+	}
 	/**
 	 * Register the REST API endpoint.
 	 *
@@ -319,16 +363,39 @@ class AnonyengineFirebase {
 	 */
 	public function register_set_device_token_endpoint() {
 		register_rest_route(
-			'anonyengine-app-notification/v1',
+			'anotf/v1',
 			'/set-device-token',
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'rest_api_set_token' ),
-				'permission_callback' => '__return_true',
+				'permission_callback' => array( $this, 'check_permission' ),
+				'args'                => $this->get_subscribe_args(),
 			)
 		);
 	}
 
+	/**
+	 * REST API callback for setting device token.
+	 *
+	 * @param object $request Request object.
+	 * @return mixed
+	 */
+	public function check_permission( $request ) {
+		$options     = get_option( ANONYENGINE_APP_NOTIFICATIONS_OPTIONS );
+		$json_params = $request->get_json_params();
+		if ( ! $json_params || empty( $json_params ) ) {
+			$json_params = $request->get_params();
+		}
+		if ( $options['rest_api_key'] !== $json_params['rest_api_key'] ) {
+			$response = array(
+				'status'  => 'error',
+				'message' => 'Unauthorized',
+			);
+			return rest_ensure_response( $response )->set_status( 401 );
+		}
+
+		return true; // Allow the request if the key matches.
+	}
 	/**
 	 * Check if a device token exists.
 	 *
@@ -355,7 +422,6 @@ class AnonyengineFirebase {
 
 		return $results && is_array( $results ) && ! empty( $results );
 	}
-
 	/**
 	 * REST API callback for setting device token.
 	 *
@@ -365,46 +431,48 @@ class AnonyengineFirebase {
 	public function rest_api_set_token( $request ) {
 		$parameters = $request->get_params();
 
-		// Check if the required parameters are present.
-		if ( isset( $parameters['device_token'] ) && isset( $parameters['auth_key'] ) ) {
-			$device_token = sanitize_text_field( $parameters['device_token'] );
-			$auth_key     = sanitize_text_field( $parameters['auth_key'] );
-
-			// Perform the desired actions with the received device_token and auth_key.
-			if ( 'fsds7$t%77' !== $auth_key ) {
-				$response = array(
-					'status'  => 'error',
-					'message' => 'Unauthorized',
-				);
-				return rest_ensure_response( $response );
-			}
-
-			if ( $this->token_exists( $device_token ) ) {
-				$response = array(
-					'status'  => 'error',
-					'message' => 'Token already exists',
-				);
-				return rest_ensure_response( $response );
-			}
-
-			$insert = wp_insert_post(
-				array(
-					'post_title'   => 'Device #' . uniqid(),
-					'post_type'    => 'anoapp_devices',
-					'post_excerpt' => $device_token,
-					'post_status'  => 'publish',
-					'post_author'  => 1,
-				)
-			);
-
-			return rest_ensure_response( $insert );
-		} else {
-			$response = array(
-				'status'  => 'error',
-				'message' => 'Missing required parameters.',
+		$user_id = intval( $parameters['user_id'] );
+		// Check if the user exists.
+		if ( ! get_userdata( $user_id ) ) {
+			$response = new WP_Error(
+				'unauthorized',
+				esc_html__( 'Unauthorized', 'anotf' ),
+				array( 'status' => 401 )
 			);
 			return rest_ensure_response( $response );
 		}
+
+		// Check if the required parameters are present.
+		$device_token = sanitize_text_field( $parameters['device_token'] );
+
+		if ( $this->token_exists( $device_token ) ) {
+			$response = new WP_Error(
+				'error',
+				esc_html__( 'Token already exists', 'anotf' ),
+				array( 'status' => 401 )
+			);
+			return rest_ensure_response( $response );
+		}
+
+		$insert = wp_insert_post(
+			array(
+				'post_title'   => 'Device #' . uniqid(),
+				'post_type'    => 'anoapp_devices',
+				'post_excerpt' => $device_token,
+				'post_status'  => 'publish',
+				'post_author'  => $user_id,
+			)
+		);
+		if ( $insert ) {
+			$response = array( 'id' => $insert );
+		} else {
+			$response = new WP_Error(
+				'error',
+				esc_html__( 'Something wrong happend.', 'anotf' ),
+				array( 'status' => 401 )
+			);
+		}
+		return rest_ensure_response( $response );
 	}
 
 	/**
