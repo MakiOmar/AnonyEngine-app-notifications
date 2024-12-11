@@ -108,7 +108,6 @@ class AnotfFirebaseCloudMessaging {
 		if ( ! $this->auth_token ) {
 			$this->get_auth_token();
 		}
-
 		// Define the notification payload.
 		$payload = array(
 			'message' => array(

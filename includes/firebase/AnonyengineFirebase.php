@@ -135,6 +135,7 @@ class AnonyengineFirebase {
 		);
 
 		if ( get_option( 'anotf_service_account_json' ) ) {
+			error_log( get_option( 'anotf_service_account_json' ) );
 			$this->fb = new fbcm( $this->settings['firebase_project_id'], get_option( 'anotf_service_account_json' ) );
 		}
 		$fb = $this->fb;
