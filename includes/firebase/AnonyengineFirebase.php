@@ -92,9 +92,22 @@ class AnonyengineFirebase {
 				// Check if the service account JSON setting is provided.
 				if ( ! empty( $settings['service_account_json'] ) ) {
 
-					// Define the file path in the uploads directory.
-					$upload_dir = wp_upload_dir();
-					$file_path  = trailingslashit( $upload_dir['basedir'] ) . 'anotf_service_account.json';
+					// Define a private directory path within wp-content.
+					$private_dir = WP_CONTENT_DIR . '/private-files';
+
+					// Ensure the directory exists or create it.
+					if ( ! is_dir( $private_dir ) ) {
+						wp_mkdir_p( $private_dir );
+					}
+
+					// Protect the directory with an .htaccess file (Apache servers).
+					$htaccess_path = trailingslashit( $private_dir ) . '.htaccess';
+					if ( ! file_exists( $htaccess_path ) ) {
+						file_put_contents( $htaccess_path, "Order Allow,Deny\nDeny from all" );
+					}
+
+					// Define the file path in the private directory.
+					$file_path = trailingslashit( $private_dir ) . 'anotf_service_account.json';
 
 					// Initialize the WordPress Filesystem API.
 					if ( ! function_exists( 'WP_Filesystem' ) ) {
@@ -120,6 +133,7 @@ class AnonyengineFirebase {
 				}
 			}
 		);
+
 		if ( get_option( 'anotf_service_account_json' ) ) {
 			$this->fb = new fbcm( $this->settings['firebase_project_id'], get_option( 'anotf_service_account_json' ) );
 		}
