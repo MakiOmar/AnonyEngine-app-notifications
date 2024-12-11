@@ -132,7 +132,53 @@ class Anonyengine_App_Notifications_Admin {
 			return $wpdb->insert( $table_name, $data );
 		}
 	}
+	/**
+	 * Generate a unique token.
+	 *
+	 * @param int $length The desired length of the token. Default is 16.
+	 * @return string The generated unique token.
+	 */
+	public static function generate_token( int $length = 16 ) {
+		if ( function_exists( 'random_bytes' ) && version_compare( PHP_VERSION, '7.0.0', '>=' ) ) {
+			// Use random_bytes for PHP 7.0 and above.
+			return substr( bin2hex( random_bytes( ceil( $length / 2 ) ) ), 0, $length );
+		} elseif ( function_exists( 'openssl_random_pseudo_bytes' ) ) {
+			// Use openssl_random_pseudo_bytes for older PHP versions.
+			return substr( bin2hex( openssl_random_pseudo_bytes( ceil( $length / 2 ) ) ), 0, $length );
+		}
 
+		// Fallback for environments without cryptographic functions.
+		return substr(
+			md5( uniqid( wp_rand(), true ) ),
+			0,
+			$length
+		);
+	}
+
+	/**
+	 * Generate a REST API key.
+	 *
+	 * The key combines multiple unique tokens separated by random delimiters.
+	 *
+	 * @return string The generated REST API key.
+	 */
+	private function generate_rest_api_key() {
+		$separators = array( '.', ':', '-', '_' );
+
+		// Create the API key with random separators and token lengths.
+		$rest_api_key = implode(
+			$separators[ wp_rand( 0, count( $separators ) - 1 ) ],
+			array(
+				self::generate_token( 10 )
+				. $separators[ wp_rand( 0, count( $separators ) - 1 ) ]
+				. self::generate_token( wp_rand( 6, 16 ) ),
+				self::generate_token( wp_rand( 16, 24 ) ),
+				self::generate_token( wp_rand( 24, 32 ) ),
+			)
+		);
+
+		return $rest_api_key;
+	}
 	/**
 	 * Create plugin's options' page
 	 */
@@ -182,6 +228,15 @@ class Anonyengine_App_Notifications_Admin {
 					'title'    => esc_html__( 'Project ID.', 'anonyengine-app-notifications' ),
 					'type'     => 'text',
 					'validate' => 'no_html',
+				),
+
+				array(
+					'id'       => 'rest_api_key',
+					'title'    => esc_html__( 'Rest api ki', 'anonyengine-app-notifications' ),
+					'default'  => $this->generate_rest_api_key(),
+					'type'     => 'text',
+					'validate' => 'no_html',
+					'desc'     => esc_html__( 'You can change if you want', 'anonyengine-app-notifications' ),
 				),
 			),
 		);
