@@ -108,6 +108,7 @@ class AnotfFirebaseCloudMessaging {
 		if ( ! $this->auth_token ) {
 			$this->get_auth_token();
 		}
+
 		// Define the notification payload.
 		$payload = array(
 			'message' => array(
@@ -125,22 +126,35 @@ class AnotfFirebaseCloudMessaging {
 				),
 			),
 		);
-		try {
-			$response = $this->guzzle_client->post(
-				$this->get_api_url(),
-				array(
-					'headers' => array(
-						'Authorization' => sprintf( 'Bearer %s', $this->auth_token ),
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => wp_json_encode( $payload ),
-				)
-			);
-			return $response;
-		} catch ( RequestException $e ) {
-			throw new \Exception( 'Failed to send Firebase notification: ' . esc_html( $e->getMessage() ) );
+
+		// Define the request arguments for wp_remote_post.
+		$args = array(
+			'headers' => array(
+				'Authorization' => sprintf( 'Bearer %s', $this->auth_token ),
+				'Content-Type'  => 'application/json',
+			),
+			'body'    => wp_json_encode( $payload ),
+			'timeout' => 15, // Optional: Set a timeout for the request.
+		);
+
+		// Send the request using wp_remote_post.
+		$response = wp_remote_post( $this->get_api_url(), $args );
+		// Check for errors.
+		if ( is_wp_error( $response ) ) {
+			throw new \Exception( 'Failed to send Firebase notification: ' . $response->get_error_message() );
 		}
+
+		// Check the response code.
+		$response_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $response_code ) {
+			$response_body = wp_remote_retrieve_body( $response );
+			error_log( 'Failed to send Firebase notification. HTTP Code: ' . $response_code . '. Response: ' . $response_body );
+		}
+
+		// Return the response body as an array.
+		return json_decode( wp_remote_retrieve_body( $response ), true );
 	}
+
 
 	/**
 	 * Subscribes a device to a topic.
@@ -152,33 +166,48 @@ class AnotfFirebaseCloudMessaging {
 	 * @throws \Exception On request failure.
 	 */
 	public function subscribe_to_topic( $topic, $device_tokens ) {
+		// Ensure device tokens are sanitized and in an array format.
 		if ( ! is_array( $device_tokens ) ) {
 			$device_tokens = array( sanitize_text_field( $device_tokens ) );
 		} else {
 			$device_tokens = array_map( 'sanitize_text_field', $device_tokens );
 		}
 
+		// Define the payload for the topic subscription.
 		$payload = array(
 			'to'                  => '/topics/' . sanitize_text_field( $topic ),
 			'registration_tokens' => $device_tokens,
 		);
 
-		try {
-			$response = $this->guzzle_client->post(
-				self::DEFAULT_TOPIC_ADD_SUBSCRIPTION_API_URL,
-				array(
-					'headers' => array(
-						'Authorization' => sprintf( 'Bearer %s', $this->auth_token ),
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => wp_json_encode( $payload ),
-				)
-			);
-			return $response;
-		} catch ( RequestException $e ) {
-			throw new \Exception( 'Failed to subscribe to topic: ' . esc_html( $e->getMessage() ) );
+		// Define the request arguments for wp_remote_post.
+		$args = array(
+			'headers' => array(
+				'Authorization' => sprintf( 'Bearer %s', $this->auth_token ),
+				'Content-Type'  => 'application/json',
+			),
+			'body'    => wp_json_encode( $payload ),
+			'timeout' => 15, // Optional: Set a timeout for the request.
+		);
+
+		// Send the request using wp_remote_post.
+		$response = wp_remote_post( self::DEFAULT_TOPIC_ADD_SUBSCRIPTION_API_URL, $args );
+
+		// Check for errors.
+		if ( is_wp_error( $response ) ) {
+			error_log( 'Failed to subscribe to topic: ' . $response->get_error_message() );
 		}
+
+		// Check the response code.
+		$response_code = wp_remote_retrieve_response_code( $response );
+		if ( $response_code !== 200 ) {
+			$response_body = wp_remote_retrieve_body( $response );
+			error_log( 'Failed to subscribe to topic. HTTP Code: ' . $response_code . '. Response: ' . $response_body );
+		}
+
+		// Return the response body as an array.
+		return json_decode( wp_remote_retrieve_body( $response ), true );
 	}
+
 
 	/**
 	 * Unsubscribes a device from a topic.
@@ -190,33 +219,48 @@ class AnotfFirebaseCloudMessaging {
 	 * @throws \Exception On request failure.
 	 */
 	public function unsubscribe_from_topic( $topic, $device_tokens ) {
+		// Ensure device tokens are sanitized and in an array format.
 		if ( ! is_array( $device_tokens ) ) {
 			$device_tokens = array( sanitize_text_field( $device_tokens ) );
 		} else {
 			$device_tokens = array_map( 'sanitize_text_field', $device_tokens );
 		}
 
+		// Define the payload for the topic unsubscription.
 		$payload = array(
 			'to'                  => '/topics/' . sanitize_text_field( $topic ),
 			'registration_tokens' => $device_tokens,
 		);
 
-		try {
-			$response = $this->guzzle_client->post(
-				self::DEFAULT_TOPIC_REMOVE_SUBSCRIPTION_API_URL,
-				array(
-					'headers' => array(
-						'Authorization' => sprintf( 'Bearer %s', $this->auth_token ),
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => wp_json_encode( $payload ),
-				)
-			);
-			return $response;
-		} catch ( RequestException $e ) {
-			throw new \Exception( 'Failed to unsubscribe from topic: ' . esc_html( $e->getMessage() ) );
+		// Define the request arguments for wp_remote_post.
+		$args = array(
+			'headers' => array(
+				'Authorization' => sprintf( 'Bearer %s', $this->auth_token ),
+				'Content-Type'  => 'application/json',
+			),
+			'body'    => wp_json_encode( $payload ),
+			'timeout' => 15, // Optional: Set a timeout for the request.
+		);
+
+		// Send the request using wp_remote_post.
+		$response = wp_remote_post( self::DEFAULT_TOPIC_REMOVE_SUBSCRIPTION_API_URL, $args );
+
+		// Check for errors.
+		if ( is_wp_error( $response ) ) {
+			error_log( 'Failed to unsubscribe from topic: ' . $response->get_error_message() );
 		}
+
+		// Check the response code.
+		$response_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $response_code ) {
+			$response_body = wp_remote_retrieve_body( $response );
+			error_log( 'Failed to unsubscribe from topic. HTTP Code: ' . $response_code . '. Response: ' . $response_body );
+		}
+
+		// Return the response body as an array.
+		return json_decode( wp_remote_retrieve_body( $response ), true );
 	}
+
 
 	/**
 	 * Returns the full API URL for Firebase HTTP v1.
@@ -242,26 +286,40 @@ class AnotfFirebaseCloudMessaging {
 
 		// Prepare the payload for adding devices to Firebase.
 		$payload = array(
-			'registration_tokens' => $devices,
+			'registration_tokens' => array_map( 'sanitize_text_field', $devices ), // Sanitize device tokens.
+		);
+
+		// Define the request arguments for wp_remote_post.
+		$args = array(
+			'headers' => array(
+				'Authorization' => sprintf( 'Bearer %s', $this->auth_token ),
+				'Content-Type'  => 'application/json',
+			),
+			'body'    => wp_json_encode( $payload ),
+			'timeout' => 15, // Optional: Set a timeout for the request.
 		);
 
 		try {
-			// Send the request to the Firebase API to add the devices.
-			$response = $this->guzzle_client->post(
-				self::DEFAULT_TOPIC_ADD_SUBSCRIPTION_API_URL,
-				array(
-					'headers' => array(
-						'Authorization' => sprintf( 'Bearer %s', $this->auth_token ),
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => wp_json_encode( $payload ),
-				)
-			);
+			// Send the request to the Firebase API.
+			$response = wp_remote_post( self::DEFAULT_TOPIC_ADD_SUBSCRIPTION_API_URL, $args );
 
-			// Return the response from Firebase.
-			return json_decode( $response->getBody()->getContents(), true );
-		} catch ( RequestException $e ) {
-			throw new \Exception( 'Failed to add devices: ' . esc_html( $e->getMessage() ) );
+			// Check for errors.
+			if ( is_wp_error( $response ) ) {
+				error_log( 'Failed to add devices: ' . $response->get_error_message() );
+			}
+
+			// Check the HTTP response code.
+			$response_code = wp_remote_retrieve_response_code( $response );
+			if ( 200 !== $response_code ) {
+				$response_body = wp_remote_retrieve_body( $response );
+				error_log( 'Failed to add devices. HTTP Code: ' . $response_code . '. Response: ' . $response_body );
+			}
+
+			// Return the decoded response body.
+			return json_decode( wp_remote_retrieve_body( $response ), true );
+		} catch ( \Exception $e ) {
+			// Handle exceptions and log the error message.
+			error_log( 'Error adding devices: ' . $e->getMessage() );
 		}
 	}
 }
