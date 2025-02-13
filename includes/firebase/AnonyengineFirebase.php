@@ -135,7 +135,6 @@ class AnonyengineFirebase {
 		);
 
 		if ( get_option( 'anotf_service_account_json' ) ) {
-			error_log( get_option( 'anotf_service_account_json' ) );
 			$this->fb = new fbcm( $this->settings['firebase_project_id'], get_option( 'anotf_service_account_json' ) );
 		}
 		$fb = $this->fb;
@@ -257,13 +256,14 @@ class AnonyengineFirebase {
 			'posts_per_page' => -1,
 		);
 		if ( $user_id ) {
-			$args['post_author'] = absint( $user_id );
+			$args['author'] = absint( $user_id );
 		}
 		$devices = get_posts( $args );
 		if ( is_array( $devices ) ) {
 			$tokens = wp_list_pluck( $devices, 'post_excerpt' );
 			if ( ! empty( $tokens ) ) {
-				$this->add_devices( $tokens );
+				//No need because devices already added using ajax
+				// $this->add_devices( $tokens );
 			}
 		}
 		return $tokens;
@@ -301,14 +301,13 @@ class AnonyengineFirebase {
 	 * @param array  $tokens       Devices tokens.
 	 * @param string $title        Notification title.
 	 * @param string $body         Notification body.
-	 * @param string $target       Target device token or topic (e.g., /topics/myTopic).
 	 * @param string $click_action Click action for the notification.
 	 * @return mixed
 	 */
-	public function notify( $tokens, $title, $body, $target, $click_action = '' ) {
+	public function notify( $tokens, $title, $body, $click_action = '' ) {
 		if ( is_array( $tokens ) ) {
-			foreach ( $tokens as $target ) {
-				$this->fb->send_notification( $title, $body, $target, $click_action );
+			foreach ( $tokens as $token ) {
+				$this->fb->send_notification( $title, $body, $token, $click_action );
 			}
 		}
 	}
@@ -407,19 +406,13 @@ class AnonyengineFirebase {
 		global $wpdb;
 
 		$post_type = 'anoapp_devices';
-		$cache_key = 'token_exists_' . substr( sanitize_text_field( $token ), 0, 10 );
-		$results   = wp_cache_get( $cache_key );
-
-		if ( ! $results ) {
-			$results = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT * FROM {$wpdb->prefix}posts WHERE post_type = %s AND post_excerpt = %s AND post_status = 'publish'",
-					$post_type,
-					sanitize_text_field( $token )
-				)
-			);
-			wp_cache_set( $cache_key, $results );
-		}
+		$results   = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$wpdb->prefix}posts WHERE post_type = %s AND post_excerpt = %s AND post_status = 'publish'",
+				$post_type,
+				sanitize_text_field( $token )
+			)
+		);
 
 		return $results && is_array( $results ) && ! empty( $results );
 	}
@@ -435,7 +428,7 @@ class AnonyengineFirebase {
 		$user_id = intval( $parameters['user_id'] );
 		// Check if the user exists.
 		if ( ! get_userdata( $user_id ) ) {
-			$response = new WP_Error(
+			$response = new \WP_Error(
 				'unauthorized',
 				esc_html__( 'Unauthorized', 'anotf' ),
 				array( 'status' => 401 )
@@ -447,7 +440,7 @@ class AnonyengineFirebase {
 		$device_token = sanitize_text_field( $parameters['device_token'] );
 
 		if ( $this->token_exists( $device_token ) ) {
-			$response = new WP_Error(
+			$response = new \WP_Error(
 				'error',
 				esc_html__( 'Token already exists', 'anotf' ),
 				array( 'status' => 401 )
@@ -467,7 +460,7 @@ class AnonyengineFirebase {
 		if ( $insert ) {
 			$response = array( 'id' => $insert );
 		} else {
-			$response = new WP_Error(
+			$response = new \WP_Error(
 				'error',
 				esc_html__( 'Something wrong happend.', 'anotf' ),
 				array( 'status' => 401 )
@@ -499,6 +492,9 @@ class AnonyengineFirebase {
 					'post_author'  => get_current_user_id(),
 				)
 			);
+			if ( ! $insert ) {
+				wp_send_json_error( 'Failed to insert device token.', 500 );
+			}
 
 			$resp = $insert;
 		}
@@ -531,6 +527,7 @@ class AnonyengineFirebase {
 		?>
 		<script delay-exclude>
 			jQuery(document).ready(function($) {
+
 				if (typeof firebase === 'undefined' || typeof firebase.messaging === 'undefined') {
 					return;
 				}
@@ -543,7 +540,6 @@ class AnonyengineFirebase {
 				// Initialize Firebase
 				const app = firebase.initializeApp(firebaseConfig);
 				const messaging = firebase.messaging();
-
 				// Check if Notification permissions are already granted
 				if (Notification.permission === 'granted') {
 					initializeFirebaseMessaging();
@@ -591,7 +587,7 @@ class AnonyengineFirebase {
 
 				// Send token to server for saving
 				function sendTokenToServer(currentToken) {
-					if (window.localStorage.getItem('fcmDeviceToken') !== currentToken) {
+					if (window.localStorage.getItem('fcmDeviceToken-<?php echo get_current_user_id(); ?>') !== currentToken) {
 						console.log('Updating token to server...');
 						setTokenAjax(currentToken);
 					} else if (!isTokenSentToServer()) {
@@ -615,7 +611,7 @@ class AnonyengineFirebase {
 						success: function(response) {
 							if (response.resp) {
 								setTokenSentToServer(true);
-								window.localStorage.setItem('fcmDeviceToken', currentToken);
+								window.localStorage.setItem('fcmDeviceToken-<?php echo get_current_user_id(); ?>', currentToken);
 							}
 						},
 						error: function(error) {
@@ -626,12 +622,12 @@ class AnonyengineFirebase {
 
 				// Check if token is already sent to the server
 				function isTokenSentToServer() {
-					return window.localStorage.getItem('sentToServer') === '1';
+					return window.localStorage.getItem('sentToServer-<?php echo get_current_user_id(); ?>') === '1';
 				}
 
 				// Set token sent flag
 				function setTokenSentToServer(sent) {
-					window.localStorage.setItem('sentToServer', sent ? '1' : '0');
+					window.localStorage.setItem('sentToServer-<?php echo get_current_user_id(); ?>', sent ? '1' : '0');
 				}
 			});
 		</script>
