@@ -262,7 +262,7 @@ class AnonyengineFirebase {
 		if ( is_array( $devices ) ) {
 			$tokens = wp_list_pluck( $devices, 'post_excerpt' );
 			if ( ! empty( $tokens ) ) {
-				//No need because devices already added using ajax
+				// No need because devices already added using ajax
 				// $this->add_devices( $tokens );
 			}
 		}
@@ -480,6 +480,18 @@ class AnonyengineFirebase {
 		if ( isset( $_req['nonce'] ) && ! wp_verify_nonce( sanitize_text_field( $_req['nonce'] ), 'anotf-ajax-nonce' ) ) {
 			wp_send_json_error( 'Invalid nonce.' );
 		}
+		global $wpdb;
+		$uuid = sanitize_text_field( $_req['uuid'] );
+		if ( 'updating' === $_req['status'] ) {
+			// Directly delete posts where post_content matches the given UUID.
+			$wpdb->query(
+				$wpdb->prepare(
+					"DELETE FROM {$wpdb->posts} WHERE post_type = %s AND post_content = %s",
+					'anoapp_devices',
+					$uuid
+				)
+			);
+		}
 
 		$resp = false;
 		if ( ! empty( $_req['token'] ) && ! $this->token_exists( sanitize_text_field( $_req['token'] ) ) ) {
@@ -488,6 +500,7 @@ class AnonyengineFirebase {
 					'post_title'   => 'Device #' . uniqid(),
 					'post_type'    => 'anoapp_devices',
 					'post_excerpt' => sanitize_text_field( $_req['token'] ),
+					'post_content' => sanitize_text_field( $_req['uuid'] ),
 					'post_status'  => 'publish',
 					'post_author'  => get_current_user_id(),
 				)
@@ -589,7 +602,7 @@ class AnonyengineFirebase {
 				function sendTokenToServer(currentToken) {
 					if (window.localStorage.getItem('fcmDeviceToken-<?php echo get_current_user_id(); ?>') !== currentToken) {
 						console.log('Updating token to server...');
-						setTokenAjax(currentToken);
+						setTokenAjax(currentToken, 'updating');
 					} else if (!isTokenSentToServer()) {
 						console.log('Sending token to server...');
 						setTokenAjax(currentToken);
@@ -597,15 +610,34 @@ class AnonyengineFirebase {
 						console.log('Token already sent to server.');
 					}
 				}
+				function generateUUID() {
+					return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+						var r = Math.random() * 16 | 0,
+							v = c == 'x' ? r : (r & 0x3 | 0x8);
+						return v.toString(16);
+					});
+				}
+
+				function getStoredUUID() {
+					let storedUUID = window.localStorage.getItem('fcmUUID');
+					if (!storedUUID) {
+						storedUUID = generateUUID();
+						window.localStorage.setItem('fcmUUID', storedUUID);
+					}
+					return storedUUID;
+				}
 
 				// Set token in the server
-				function setTokenAjax(currentToken) {
+				function setTokenAjax(currentToken, status = 'inserting') {
+					let uuid = getStoredUUID();
 					$.ajax({
 						url: anotf_ajax_object.ajaxUrl,
 						type: 'POST',
 						data: {
 							action: 'anotf_set_device_token',
 							token: currentToken,
+							uuid: uuid,
+							status: status,
 							_ajax_nonce: anotf_ajax_object.nonce // Include the nonce for security
 						},
 						success: function(response) {
