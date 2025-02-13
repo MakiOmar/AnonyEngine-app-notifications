@@ -15,7 +15,7 @@
  * Plugin Name:       AnonyEngine app notifications
  * Plugin URI:        https://https://github.com/MakiOmar/AnonyEngine-app-notifications
  * Description:       Send real time notifications to mobile apps
- * Version:           1.0.1
+ * Version:           1.0.2
  * Author:            Makiomar
  * Author URI:        https://https://github.com/MakiOmar
  * License:           GPL-2.0+
